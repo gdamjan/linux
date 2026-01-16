@@ -65,6 +65,19 @@
 #define IMX471_DGTL_GAIN_STEP		1
 #define IMX471_DGTL_GAIN_DEFAULT	256
 
+#define IMX471_REG_VALUE_08BIT		1
+#define IMX471_REG_VALUE_16BIT		2
+#define IMX471_REG_VALUE_24BIT		3
+
+/* HFLIP and VFLIP control */
+#define IMX471_REG_ORIENTATION	0x0101
+
+/* Horizontal crop window offset */
+#define IMX471_REG_H_WIN_OFFSET	0x0409
+
+/* Vertical crop window offset */
+#define IMX471_REG_V_WIN_OFFSET	0x034b
+
 /* Test Pattern Control */
 #define IMX471_REG_TEST_PATTERN		0x0600
 #define IMX471_TEST_PATTERN_DISABLED		0
@@ -211,22 +224,22 @@ static const struct imx471_reg_list imx471_global_setting = {
 };
 
 static const struct imx471_reg mode_1928x1088_regs[] = {
-	{0x0101, 0x02},
+	{0x0101, 0x00},
 	{0x0112, 0x0a},
 	{0x0113, 0x0a},
 	{0x0114, 0x03},
 	{0x0342, 0x0a},
-	{0x0343, 0xe0},
-	{0x0340, 0x04},
-	{0x0341, 0xec},
+	{0x0343, 0x00},
+	{0x0340, 0x13},
+	{0x0341, 0xb0},
 	{0x0344, 0x00},
 	{0x0345, 0x00},
 	{0x0346, 0x01},
-	{0x0347, 0xba},
+	{0x0347, 0xbc},
 	{0x0348, 0x12},
 	{0x0349, 0x2f},
 	{0x034a, 0x0b},
-	{0x034b, 0xe0},
+	{0x034b, 0xeb},
 	{0x0381, 0x01},
 	{0x0383, 0x01},
 	{0x0385, 0x01},
@@ -237,9 +250,9 @@ static const struct imx471_reg mode_1928x1088_regs[] = {
 	{0x3f4c, 0x81},
 	{0x3f4d, 0x81},
 	{0x0408, 0x00},
-	{0x0409, 0xc9},
+	{0x0409, 0xc8},
 	{0x040a, 0x00},
-	{0x040b, 0x6d},
+	{0x040b, 0x6c},
 	{0x040c, 0x07},
 	{0x040d, 0x88},
 	{0x040e, 0x04},
@@ -252,7 +265,7 @@ static const struct imx471_reg mode_1928x1088_regs[] = {
 	{0x0303, 0x02},
 	{0x0305, 0x02},
 	{0x0306, 0x00},
-	{0x0307, 0x3c},
+	{0x0307, 0x79},
 	{0x030b, 0x01},
 	{0x030d, 0x02},
 	{0x030e, 0x00},
@@ -400,6 +413,54 @@ static int imx471_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	return 0;
 }
 
+/*
+	Set HFLIP and VFLIP
+	IMX471_REG_ORIENTATION bit(0) : HFLIP
+	IMX471_REG_ORIENTATION bit(1) : VFLIP
+
+*/
+static int imx471_set_ctrl_hflip(struct imx471 *imx471, u32 ctrl_val)
+{
+	int ret;
+	u32 val;
+
+	ret = imx471_read_reg(imx471, IMX471_REG_ORIENTATION,
+				IMX471_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	ret = imx471_write_reg(imx471, IMX471_REG_ORIENTATION,
+				IMX471_REG_VALUE_08BIT,
+				ctrl_val ? val | BIT(0) : val & ~BIT(0));
+	return ret;
+}
+
+static int imx471_set_ctrl_vflip(struct imx471 *imx471, u32 ctrl_val)
+{
+	int ret;
+	u32 val;
+
+	ret = imx471_read_reg(imx471, IMX471_REG_ORIENTATION,
+				IMX471_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	ret = imx471_write_reg(imx471, IMX471_REG_ORIENTATION,
+				IMX471_REG_VALUE_08BIT,
+				ctrl_val ? val | BIT(1) : val & ~BIT(1));
+	if(ret)
+		return ret;
+
+	ret = imx471_read_reg(imx471, IMX471_REG_V_WIN_OFFSET,
+				IMX471_REG_VALUE_08BIT, &val);
+	if (ret)
+		return ret;
+
+	return imx471_write_reg(imx471, IMX471_REG_V_WIN_OFFSET,
+				IMX471_REG_VALUE_08BIT,
+				ctrl_val ? ++val : val);
+}
+
 static int imx471_set_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct imx471 *imx471 = container_of(ctrl->handler,
@@ -449,6 +510,15 @@ static int imx471_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = imx471_write_reg(imx471, IMX471_REG_TEST_PATTERN,
 				       2, ctrl->val);
 		break;
+
+	case V4L2_CID_HFLIP:
+		ret = imx471_set_ctrl_hflip(imx471, ctrl->val);
+		break;
+
+	case V4L2_CID_VFLIP:
+		ret = imx471_set_ctrl_vflip(imx471, ctrl->val);
+		break;
+
 	default:
 		ret = -EINVAL;
 		dev_info(&client->dev, "ctrl(id:0x%x,val:0x%x) is not handled",
@@ -653,7 +723,7 @@ static int imx471_power_on(struct device *dev)
 
 	gpiod_set_value_cansleep(imx471->reset_gpio, 0);
 
-	usleep_range(1000, 1500);
+	usleep_range(10000, 15000);
 
 	return 0;
 }
@@ -664,6 +734,8 @@ static int imx471_start_streaming(struct imx471 *imx471)
 	struct i2c_client *client = v4l2_get_subdevdata(&imx471->sd);
 	const struct imx471_reg_list *reg_list;
 	int ret;
+
+	dev_info(&client->dev, "Start streaming\n");
 
 	ret = imx471_identify_module(imx471);
 	if (ret)
@@ -778,6 +850,8 @@ static int imx471_init_controls(struct imx471 *imx471)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(&imx471->sd);
 	struct v4l2_ctrl_handler *ctrl_hdlr;
+	struct v4l2_fwnode_device_properties props;
+
 	s64 exposure_max;
 	s64 vblank_def;
 	s64 vblank_min;
@@ -792,6 +866,7 @@ static int imx471_init_controls(struct imx471 *imx471)
 	if (ret)
 		return ret;
 
+	mutex_init(&imx471->mutex);
 	ctrl_hdlr->lock = &imx471->mutex;
 	max = ARRAY_SIZE(link_freq_menu_items) - 1;
 	imx471->link_freq = v4l2_ctrl_new_int_menu(ctrl_hdlr, &imx471_ctrl_ops,
@@ -845,11 +920,23 @@ static int imx471_init_controls(struct imx471 *imx471)
 				     V4L2_CID_TEST_PATTERN,
 				     ARRAY_SIZE(imx471_test_pattern_menu) - 1,
 				     0, 0, imx471_test_pattern_menu);
+
+	/* HFLIP & VFLIP */
+	v4l2_ctrl_new_std(ctrl_hdlr, &imx471_ctrl_ops,
+				V4L2_CID_HFLIP, 0, 1, 1, 0);
+	v4l2_ctrl_new_std(ctrl_hdlr, &imx471_ctrl_ops,
+				V4L2_CID_VFLIP, 0, 1, 1, 0);
+
 	if (ctrl_hdlr->error) {
 		ret = ctrl_hdlr->error;
-		dev_err(&client->dev, "control init failed: %d", ret);
+		dev_err(&client->dev, "%s control init failed: %d", __func__, ret);
 		goto error;
 	}
+
+	ret = v4l2_ctrl_new_fwnode_properties(ctrl_hdlr, &imx471_ctrl_ops,
+							      &props);
+	if (ret)
+		goto error;
 
 	imx471->sd.ctrl_handler = ctrl_hdlr;
 
@@ -857,6 +944,7 @@ static int imx471_init_controls(struct imx471 *imx471)
 
 error:
 	v4l2_ctrl_handler_free(ctrl_hdlr);
+	mutex_destroy(&imx471->mutex);
 
 	return ret;
 }
@@ -876,7 +964,6 @@ static int imx471_get_pm_resources(struct device *dev)
 	imx471->avdd = devm_regulator_get_optional(dev, "avdd");
 	if (IS_ERR(imx471->avdd)) {
 		ret = PTR_ERR(imx471->avdd);
-		dev_info(dev, "reg returned %d\n", ret);
 		imx471->avdd = NULL;
 		if (ret != -ENODEV)
 			return dev_err_probe(dev, ret,
