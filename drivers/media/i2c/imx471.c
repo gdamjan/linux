@@ -131,6 +131,9 @@ struct imx471_mode {
 	/* H-timing */
 	u32 llp;
 
+	/* Analog crop window in native array coordinates */
+	struct v4l2_rect crop;
+
 	const struct cci_reg_sequence *default_mode_regs;
 	unsigned int default_mode_regs_length;
 };
@@ -283,6 +286,13 @@ static const struct imx471_mode imx471_modes[] = {
 		.fll_def = 1308,
 		.fll_min = 1308,
 		.llp = 2328,
+		/* X/Y_ADD_STA/END: 8..4647 x 408..3051 */
+		.crop = {
+			.left = 8,
+			.top = 408,
+			.width = 4640,
+			.height = 2644,
+		},
 		.default_mode_regs = mode_1928x1088_regs,
 		.default_mode_regs_length = ARRAY_SIZE(mode_1928x1088_regs),
 	},
@@ -430,6 +440,7 @@ static int imx471_set_pad_format(struct v4l2_subdev *sd,
 	imx471_update_pad_format(sensor, mode, fmt);
 
 	*v4l2_subdev_state_get_format(sd_state, fmt->pad) = fmt->format;
+	*v4l2_subdev_state_get_crop(sd_state, fmt->pad) = mode->crop;
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
 		return 0;
@@ -461,7 +472,7 @@ static int imx471_get_selection(struct v4l2_subdev *sd,
 	switch (sel->target) {
 	case V4L2_SEL_TGT_CROP:
 		sel->r = *v4l2_subdev_state_get_crop(sd_state, sel->pad);
-		break;
+		return 0;
 
 	case V4L2_SEL_TGT_NATIVE_SIZE:
 		sel->r.top = 0;
