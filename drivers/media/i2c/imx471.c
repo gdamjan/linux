@@ -131,6 +131,9 @@ struct imx471_mode {
 	/* H-timing */
 	u32 llp;
 
+	/* Analogue crop rectangle in the sensor's pixel array */
+	struct v4l2_rect crop;
+
 	const struct cci_reg_sequence *default_mode_regs;
 	unsigned int default_mode_regs_length;
 };
@@ -283,6 +286,19 @@ static const struct imx471_mode imx471_modes[] = {
 		.fll_def = 1308,
 		.fll_min = 1308,
 		.llp = 2328,
+		/*
+		 * The mode reads out rows 408..3051 and columns 8..4647 of the
+		 * pixel array, bins that 2x2 and then digitally crops 1928x1088
+		 * at (208,108) of the binned frame, so in pixel array
+		 * coordinates the analogue crop starts at
+		 * (8 + 208 * 2, 408 + 108 * 2) and spans 1928 * 2 x 1088 * 2.
+		 */
+		.crop = {
+			.left = 424,
+			.top = 624,
+			.width = 3856,
+			.height = 2176,
+		},
 		.default_mode_regs = mode_1928x1088_regs,
 		.default_mode_regs_length = ARRAY_SIZE(mode_1928x1088_regs),
 	},
@@ -430,6 +446,7 @@ static int imx471_set_pad_format(struct v4l2_subdev *sd,
 	imx471_update_pad_format(sensor, mode, fmt);
 
 	*v4l2_subdev_state_get_format(sd_state, fmt->pad) = fmt->format;
+	*v4l2_subdev_state_get_crop(sd_state, fmt->pad) = mode->crop;
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
 		return 0;
@@ -461,7 +478,7 @@ static int imx471_get_selection(struct v4l2_subdev *sd,
 	switch (sel->target) {
 	case V4L2_SEL_TGT_CROP:
 		sel->r = *v4l2_subdev_state_get_crop(sd_state, sel->pad);
-		break;
+		return 0;
 
 	case V4L2_SEL_TGT_NATIVE_SIZE:
 		sel->r.top = 0;
