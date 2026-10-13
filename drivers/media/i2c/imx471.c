@@ -57,7 +57,7 @@
 #define IMX471_REG_ORIENTATION			CCI_REG8(0x0101)
 
 /* Test Pattern Control */
-#define IMX471_REG_TEST_PATTERN			CCI_REG8(0x0600)
+#define IMX471_REG_TEST_PATTERN			CCI_REG16(0x0600)
 
 /* default link frequency and external clock */
 #define IMX471_LINK_FREQ_DEFAULT		200000000LL
