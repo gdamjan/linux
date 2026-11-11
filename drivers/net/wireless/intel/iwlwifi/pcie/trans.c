@@ -2070,7 +2070,10 @@ iwl_trans_pcie_call_prod_reset_dsm(struct pci_dev *pdev, u16 cmd, u16 value)
 						 0x81, 0x4F, 0x75, 0xE4,
 						 0xDD, 0x26, 0xB5, 0xFD);
 
-	if (!acpi_check_dsm(ACPI_HANDLE(&pdev->dev), &dsm_guid, ACPI_DSM_REV,
+	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
+
+	if (!handle ||
+	    !acpi_check_dsm(handle, &dsm_guid, ACPI_DSM_REV,
 			    BIT(DSM_INTERNAL_FUNC_PRODUCT_RESET)))
 		return ERR_PTR(-ENODEV);
 

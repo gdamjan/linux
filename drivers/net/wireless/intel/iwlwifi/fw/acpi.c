@@ -85,10 +85,20 @@ union acpi_object *iwl_acpi_get_dsm_object(struct device *dev, int rev,
 					   int func, union acpi_object *args,
 					   const guid_t *guid)
 {
+	acpi_handle handle = ACPI_HANDLE(dev);
 	union acpi_object *obj;
 
-	obj = acpi_evaluate_dsm(ACPI_HANDLE(dev), guid, rev, func,
-				args);
+	/*
+	 * Devices without an ACPI companion (e.g. add-in cards) have no
+	 * _DSM; don't let the ACPI core warn about a NULL handle.
+	 */
+	if (!handle) {
+		IWL_DEBUG_DEV_RADIO(dev,
+				    "ACPI: Could not retrieve root port handle\n");
+		return ERR_PTR(-ENOENT);
+	}
+
+	obj = acpi_evaluate_dsm(handle, guid, rev, func, args);
 	if (!obj) {
 		IWL_DEBUG_DEV_RADIO(dev,
 				    "ACPI: DSM method invocation failed (rev: %d, func:%d)\n",
